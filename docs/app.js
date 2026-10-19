@@ -6,6 +6,8 @@ const INPUT_PATH = "/tmp/text-to-md-input";
 
 const form = document.querySelector("#convert-form");
 const fileInput = document.querySelector("#document");
+const dropZone = document.querySelector("#drop-zone");
+const selectedFile = document.querySelector("#selected-file");
 const convertButton = document.querySelector("#convert-button");
 const status = document.querySelector("#status");
 const warnings = document.querySelector("#warnings");
@@ -21,6 +23,53 @@ function setStatus(message, state = "") {
   status.textContent = message;
   status.dataset.state = state;
 }
+
+function updateSelectedFile() {
+  const file = fileInput.files[0];
+  selectedFile.textContent = file
+    ? `Vybraný soubor: ${file.name}`
+    : "Zatím není vybrán žádný soubor.";
+}
+
+let dragDepth = 0;
+
+fileInput.addEventListener("change", updateSelectedFile);
+
+dropZone.addEventListener("dragenter", (event) => {
+  event.preventDefault();
+  dragDepth += 1;
+  dropZone.classList.add("is-drag-over");
+});
+
+dropZone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+});
+
+dropZone.addEventListener("dragleave", (event) => {
+  event.preventDefault();
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) {
+    dropZone.classList.remove("is-drag-over");
+  }
+});
+
+dropZone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  dragDepth = 0;
+  dropZone.classList.remove("is-drag-over");
+
+  const files = event.dataTransfer?.files;
+  if (!files?.length) {
+    return;
+  }
+  if (files.length > 1) {
+    setStatus("Přetáhněte prosím pouze jeden soubor.", "error");
+    return;
+  }
+
+  fileInput.files = files;
+  fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+});
 
 async function loadConverter() {
   if (!pyodidePromise) {

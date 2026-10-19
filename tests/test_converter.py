@@ -236,6 +236,40 @@ class ConvertDocxTests(unittest.TestCase):
             markdown,
         )
 
+    def test_omits_email_template_guidance_but_preserves_email_content(self) -> None:
+        instruction = (
+            "Tato podkapitola se vyplní v případě, pokud bude v požadavku "
+            "definovaná alespoň jedna E-mailová textace. U všech emailů se "
+            "vkládá standardní hlavička a patička ČS."
+        )
+        placeholder = (
+            "Zde se doplní Emailová textace, která bude v českém jazyce."
+        )
+        document = Document()
+        document.add_heading("Email", level=1)
+        document.add_paragraph(instruction)
+        document.add_paragraph("Český jazyk", style="List Paragraph")
+        document.add_paragraph("Předmět emailu: Oznámení o změně")
+        document.add_paragraph(placeholder)
+        body = document.add_paragraph()
+        body.add_run("Váš účet ")
+        body.add_run("<contractNum>")
+        body.add_run(" byl aktualizován.")
+        output = BytesIO()
+        document.save(output)
+
+        markdown, _ = convert_docx(
+            self.add_comment_to_docx(output.getvalue()),
+            "email.docx",
+        )
+
+        self.assertNotIn("Tato podkapitola se vyplní", markdown)
+        self.assertNotIn(placeholder, markdown)
+        self.assertIn("Oznámení o změně", markdown)
+        self.assertIn("Váš účet", markdown)
+        self.assertIn("Komentáře k tělu e-mailu", markdown)
+        self.assertIn("Číslo smlouvy", markdown)
+
     def test_infers_email_body_after_subject_when_no_body_label_exists(self) -> None:
         document = Document()
         document.add_heading("Email", level=1)
@@ -338,6 +372,163 @@ class ConvertDocxTests(unittest.TestCase):
         self.assertIn("```text\nEnglish title\n```", markdown)
         self.assertIn("```text\nEnglish message text\n```", markdown)
 
+    def test_omits_channels_marked_not_required(self) -> None:
+        cases = (
+            ("Email", "Email není požadována", "after_heading"),
+            ("SMS", "SMS není požadována", "before_heading"),
+            ("PUSH", "PUSH není požadována", "after_body"),
+        )
+        for channel, status, status_position in cases:
+            with self.subTest(channel=channel):
+                document = Document()
+                if status_position == "before_heading":
+                    document.add_paragraph(status)
+                document.add_heading(channel, level=1)
+                document.add_paragraph(f"Obsah sekce {channel}.")
+                if status_position == "after_heading":
+                    document.add_paragraph(status)
+                elif status_position == "after_body":
+                    document.add_paragraph(status)
+                output = BytesIO()
+                document.save(output)
+
+                markdown, _ = convert_docx(
+                    output.getvalue(),
+                    "nepozadovana-komunikace.docx",
+                )
+
+                self.assertNotIn(f"## {channel}", markdown)
+                self.assertNotIn(status, markdown)
+                self.assertNotIn(f"Obsah sekce {channel}.", markdown)
+
+    def test_omits_instruction_section_until_next_peer_heading(self) -> None:
+        document = Document()
+        document.add_heading("Základní informace", level=1)
+        document.add_paragraph("Důležitý obsah.")
+        document.add_heading("3 Instrukce", level=2)
+        document.add_paragraph("Instrukce k vyplnění.")
+        document.add_heading("Příklad", level=3)
+        document.add_paragraph("Další text instrukcí.")
+        document.add_heading("Obchodní zadání", level=2)
+        document.add_paragraph("Zachovaný obsah.")
+        output = BytesIO()
+        document.save(output)
+
+        markdown, _ = convert_docx(output.getvalue(), "pozadavek.docx")
+
+        self.assertNotIn("## Instrukce", markdown)
+        self.assertNotIn("Instrukce k vyplnění.", markdown)
+        self.assertNotIn("Další text instrukcí.", markdown)
+        self.assertIn("Základní informace", markdown)
+        self.assertIn("Obchodní zadání", markdown)
+        self.assertIn("Zachovaný obsah.", markdown)
+
+    def test_formats_guarantor_details_as_template_sections(self) -> None:
+        document = Document()
+        table = document.add_table(rows=0, cols=2)
+        rows = (
+            ("Tribe", "T302_IT Corporate Daily Banking and Lending"),
+            (
+                "Business garant",
+                "Iva Zázvorková\nemail: izazvorkova@csas.cz\n"
+                "telefon: +420 704 993 082",
+            ),
+            (
+                "Garant pro akceptaci požadavku a schválení pro nasazen "
+                "na PROD prostředí",
+                "Iva Zázvorková\nemail: izazvorkova@csas.cz\n"
+                "telefon: +420 704 993 082",
+            ),
+            ("Zdrojový systém", "G4B_NOTIFICATIONS"),
+        )
+        for label, value in rows:
+            cells = table.add_row().cells
+            cells[0].text = label
+            cells[1].text = value
+        output = BytesIO()
+        document.save(output)
+
+        markdown, _ = convert_docx(output.getvalue(), "pozadavek.docx")
+
+        self.assertIn("## Business garant", markdown)
+        self.assertIn("- **Jméno:** Iva Zázvorková", markdown)
+        self.assertIn("- **E-mail:** izazvorkova@csas.cz", markdown)
+        self.assertIn("- **Telefon:** +420704993082", markdown)
+        self.assertIn(
+            "## Garant akceptace a schválení nasazení na PROD\n\n"
+            "Stejný jako Business garant",
+            markdown,
+        )
+        self.assertIn("- **Tribe:** T302_IT Corporate Daily Banking and Lending", markdown)
+        self.assertIn("- **Zdrojový systém:** G4B_NOTIFICATIONS", markdown)
+        self.assertNotIn("<br>email:", markdown)
+        self.assertNotIn("+420 704 993 082", markdown)
+
+    def test_simplifies_trace_storage_label(self) -> None:
+        document = Document()
+        row = document.add_table(rows=1, cols=2).rows[0]
+        row.cells[0].text = "Ukládání komunikace do TRACE"
+        row.cells[1].text = "NE"
+        output = BytesIO()
+        document.save(output)
+
+        markdown, _ = convert_docx(output.getvalue(), "pozadavek.docx")
+
+        self.assertIn("- **Ukládání do TRACE:** NE", markdown)
+        self.assertNotIn("Ukládání komunikace do TRACE", markdown)
+
+    def test_trace_storage_keeps_only_standalone_yes_or_no(self) -> None:
+        document = Document()
+        table = document.add_table(rows=0, cols=2)
+        rows = (
+            (
+                "Ukládání komunikace do TRACE",
+                "NE\nTrace_Type: typ\nTrace_Sub_Type: podtyp\nState: aktivní",
+            ),
+            (
+                "Ukládání do TRACE",
+                "Trace_Type: typ\nTrace_Sub_Type: podtyp\nState: NE",
+            ),
+        )
+        for label, value in rows:
+            cells = table.add_row().cells
+            cells[0].text = label
+            cells[1].text = value
+        output = BytesIO()
+        document.save(output)
+
+        markdown, _ = convert_docx(output.getvalue(), "pozadavek.docx")
+
+        self.assertEqual(markdown.count("- **Ukládání do TRACE:** NE"), 1)
+        self.assertNotIn("Trace_Type", markdown)
+        self.assertNotIn("Trace_Sub_Type", markdown)
+        self.assertNotIn("State:", markdown)
+
+    def test_normalizes_kcp_consultation_to_yes_no_and_defaults_blank(self) -> None:
+        document = Document()
+        table = document.add_table(rows=0, cols=2)
+        rows = (
+            (
+                "Požadavek musí být konzultován s KCP. E-mailová adresa, "
+                "na kterou se obraťte: pripominkyWFM@csas.cz",
+                "ANO",
+            ),
+            ("Konzultace s KCP", ""),
+        )
+        for label, value in rows:
+            cells = table.add_row().cells
+            cells[0].text = label
+            cells[1].text = value
+        output = BytesIO()
+        document.save(output)
+
+        markdown, _ = convert_docx(output.getvalue(), "pozadavek.docx")
+
+        self.assertIn("- **Konzultace s KCP:** ANO", markdown)
+        self.assertIn("- **Konzultace s KCP:** NE", markdown)
+        self.assertNotIn("Požadavek musí být konzultován", markdown)
+        self.assertNotIn("pripominkyWFM@csas.cz", markdown)
+
     def test_extracts_word_comment_and_its_anchor_text(self) -> None:
         document_xml = f"""\
 <w:document xmlns:w="{_WORD_NS}">
@@ -368,6 +559,20 @@ class ConvertOtherFormatsTests(unittest.TestCase):
 
         self.assertEqual(markdown, "# poznamky\n\nPrvní řádek.\nDruhý řádek.\n")
         self.assertEqual(warnings, [])
+
+    def test_omits_template_guidance_from_text_but_keeps_content(self) -> None:
+        content = (
+            "Nadpis\n\n"
+            "Tato podkapitola se vyplní v případě definované textace.\n\n"
+            "Zde se doplní Emailová textace, která bude v českém jazyce.\n\n"
+            "Váš účet je aktivní."
+        )
+
+        markdown, _ = convert_txt(content.encode("utf-8"), "poznamky.txt")
+
+        self.assertNotIn("Tato podkapitola se vyplní", markdown)
+        self.assertNotIn("Zde se doplní Emailová textace", markdown)
+        self.assertIn("Váš účet je aktivní.", markdown)
 
     def test_rejects_text_that_is_not_utf8(self) -> None:
         with self.assertRaisesRegex(ValueError, "UTF-8"):

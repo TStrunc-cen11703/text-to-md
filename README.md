@@ -12,6 +12,21 @@ formulářové tabulky se převedou na odrážky s tučně označenými názvy p
 Číslování kapitol na začátku nadpisů, například `1 Management summary`, se
 ve výstupu odstraní. Nadpis druhé úrovně `Management summary` se převede na
 `Základní informace`.
+Sekce Email, SMS nebo PUSH se vynechá, pokud dokument uvádí, že příslušný
+kanál není požadován, například `SMS není požadována`.
+Sekce `Instrukce` v DOCX se vynechá včetně podsekcí a jejího textu až do
+následujícího nadpisu stejné nebo vyšší úrovně.
+Kontakty Business garanta a garanta akceptace se v tabulkách převedou do
+samostatných sekcí; pokud jsou stejné, druhá sekce uvede „Stejný jako Business
+garant“. Telefonní čísla se převedou bez mezer.
+Popisek `Ukládání komunikace do TRACE` se zkrátí na `Ukládání do TRACE`.
+U tohoto pole se zachová pouze samostatná hodnota `ANO` nebo `NE`; položky
+`Trace_Type`, `Trace_Sub_Type` a `State` se vynechají.
+Pole s KCP se převede na `Konzultace s KCP` a hodnotu `ANO` nebo `NE`;
+prázdná hodnota se doplní jako `NE`.
+Obecné instrukční texty šablony, například „Tato podkapitola se vyplní…“ nebo
+„Zde se doplní Emailová textace…“, se vynechají; skutečný obsah a komentáře
+k proměnným zůstávají zachovány.
 Jako hlavní nadpis se použije název komunikace, pokud je v dokumentu uveden;
 vysvětlující texty v závorkách se z názvů formulářových polí odstraní.
 V e-mailu se předmět a preheader převedou jako textové bloky a tělo jako HTML
@@ -35,6 +50,7 @@ veřejné. Vybraný dokument zpracovává Python převodník spuštěný v prohl
 obsah dokumentu se neodesílá na GitHub ani na jiné servery. Při prvním použití
 se z CDN a PyPI stáhne běhové prostředí a potřebné knihovny.
 Výsledný soubor se vždy jmenuje `pozadavek-na-sablonu.md`.
+Soubor lze do vyznačeného pole přetáhnout nebo jej vybrat tlačítkem.
 
 ## Spuštění
 

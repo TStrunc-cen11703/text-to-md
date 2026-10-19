@@ -47,10 +47,48 @@
       font-weight: 600;
     }
 
-    input[type="file"] {
+    .drop-zone {
+      margin: 22px 0 16px;
+      padding: 20px;
+      border: 2px dashed #98a2b3;
+      border-radius: 8px;
+      text-align: center;
+      transition: border-color 120ms ease, background-color 120ms ease;
+    }
+
+    .drop-zone.is-drag-over {
+      border-color: #155eef;
+      background: #eff4ff;
+    }
+
+    .drop-zone label {
+      margin: 0 0 8px;
+    }
+
+    .drop-zone__prompt {
+      margin: 0 0 12px;
+      font-weight: 600;
+    }
+
+    .drop-zone__description,
+    .drop-zone__selected {
+      color: #475467;
+      font-size: 0.9rem;
+    }
+
+    .drop-zone__description {
+      margin: 0 0 8px;
+    }
+
+    .drop-zone__selected {
+      margin: 8px 0 0;
+      overflow-wrap: anywhere;
+    }
+
+    .drop-zone input[type="file"] {
       display: block;
-      width: 100%;
-      margin-bottom: 16px;
+      max-width: 100%;
+      margin: 0 auto 8px;
     }
 
     button {
@@ -142,14 +180,25 @@
     </p>
 
     <form id="convert-form">
-      <label for="document">Vyberte dokument</label>
-      <input
-        id="document"
-        name="file"
-        type="file"
-        accept=".docx,.txt,.pdf"
-        required
-      >
+      <div id="drop-zone" class="drop-zone">
+        <p class="drop-zone__prompt">Přetáhněte soubor sem nebo jej vyberte ručně.</p>
+        <label for="document">Vyberte dokument</label>
+        <input
+          id="document"
+          name="file"
+          type="file"
+          accept=".docx,.txt,.pdf"
+          aria-describedby="drop-description selected-file"
+          required
+        >
+        <p id="drop-description" class="drop-zone__description">
+          Podporované formáty: Word (.docx), text (.txt) a textové PDF (.pdf).
+          Limit je 20 MB.
+        </p>
+        <p id="selected-file" class="drop-zone__selected" aria-live="polite">
+          Zatím není vybrán žádný soubor.
+        </p>
+      </div>
       <button id="convert-button" type="submit">Převést na Markdown</button>
     </form>
 

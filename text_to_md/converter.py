@@ -50,6 +50,18 @@ COMMUNICATION_HEADING = re.compile(
     r"^(?:\d+(?:\.\d+)*\s+)?(?P<channel>sms|e-?mail|push(?:\s+notifikace)?)$",
     re.IGNORECASE,
 )
+INSTRUCTION_HEADING = re.compile(r"^instrukce$", re.IGNORECASE)
+CHANNEL_NOT_REQUIRED = re.compile(
+    r"\b(?P<channel>sms|e-?mail|push(?:\s+notifikace)?)\b"
+    r"[\s:–—-]*(?:není|nejsou)\s+"
+    r"(?:požadov\w*|vyžadov\w*|potřeb\w*)",
+    re.IGNORECASE,
+)
+TEMPLATE_GUIDANCE = re.compile(
+    r"^(?:tato\s+podkapitola\s+se\s+vyplní\b|"
+    r"zde\s+se\s+doplní\s+(?:e-?mailová\s+)?textace\b)",
+    re.IGNORECASE,
+)
 FIELD_LABEL = re.compile(r"^([^:\n]{1,80}):\s*(.+)$")
 
 
@@ -174,7 +186,29 @@ def _escape_table_cell(text: str) -> str:
 
 
 def _clean_field_label(text: str) -> str:
-    return re.sub(r"\s*\([^()]*\)", "", text).strip()
+    cleaned = re.sub(r"\s*\([^()]*\)", "", text).strip()
+    normalized = re.sub(r"\s+", " ", cleaned).casefold()
+    if normalized == "ukládání komunikace do trace":
+        return "Ukládání do TRACE"
+    return cleaned
+
+
+def _is_template_guidance(text: str) -> bool:
+    normalized = re.sub(r"\s+", " ", text).strip()
+    return TEMPLATE_GUIDANCE.match(normalized) is not None
+
+
+def _remove_template_guidance(text: str) -> str:
+    paragraphs = re.split(r"\n\s*\n", text)
+    nonempty_paragraphs = [paragraph for paragraph in paragraphs if paragraph.strip()]
+    filtered_paragraphs = [
+        paragraph
+        for paragraph in nonempty_paragraphs
+        if not _is_template_guidance(paragraph)
+    ]
+    if len(filtered_paragraphs) == len(nonempty_paragraphs):
+        return text
+    return "\n\n".join(filtered_paragraphs).strip()
 
 
 def _find_communication_title(document_blocks) -> Paragraph | None:
@@ -196,9 +230,100 @@ def _find_communication_title(document_blocks) -> Paragraph | None:
     return None
 
 
+def _contact_section_title(label: str) -> str | None:
+    normalized = " ".join(label.casefold().split())
+    if normalized == "business garant":
+        return "Business garant"
+    if (
+        normalized.startswith("garant")
+        and "akcept" in normalized
+        and ("prod" in normalized or "nasazen" in normalized)
+    ):
+        return "Garant akceptace a schválení nasazení na PROD"
+    return None
+
+
+def _is_kcp_consultation_label(label: str) -> bool:
+    normalized = re.sub(r"\s+", " ", label).strip().casefold()
+    return (
+        normalized == "konzultace s kcp"
+        or normalized.startswith(
+            "požadavek musí být konzultován s kcp"
+        )
+    )
+
+
+def _contact_fields(value: str) -> list[tuple[str, str]]:
+    text = re.sub(r"<br\s*/?>", "\n", value, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    fields: dict[str, str] = {}
+    extra_fields = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        match = FIELD_LABEL.match(line)
+        if match:
+            raw_label = " ".join(match.group(1).casefold().split())
+            field_value = match.group(2).strip()
+            if raw_label == "cen":
+                label = "CEN"
+            elif raw_label in {"jméno", "jmeno", "name"}:
+                label = "Jméno"
+            elif raw_label in {"e-mail", "email", "e mail"}:
+                label = "E-mail"
+            elif raw_label in {"telefon", "telefonní číslo", "telefonni cislo", "phone"}:
+                label = "Telefon"
+            else:
+                extra_fields.append((match.group(1).strip(), field_value))
+                continue
+        else:
+            label = "Jméno"
+            field_value = line
+        if label == "Telefon":
+            field_value = re.sub(r"\s+", "", field_value)
+        fields.setdefault(label, field_value)
+
+    ordered_fields = [
+        (label, fields[label])
+        for label in ("CEN", "Jméno", "E-mail", "Telefon")
+        if label in fields
+    ]
+    return ordered_fields + extra_fields
+
+
+def _standalone_yes_no_value(value: str) -> str | None:
+    text = re.sub(r"<br\s*/?>", "\n", value, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    values = set()
+    for line in text.splitlines():
+        candidate = re.sub(
+            r"^(?:ukládání(?:\s+komunikace)?\s+do\s+trace|"
+            r"konzultace\s+s\s+kcp)\s*:\s*",
+            "",
+            line.strip(),
+            flags=re.IGNORECASE,
+        )
+        match = re.fullmatch(r"(ano|ne)[.!]?", candidate.strip(), re.IGNORECASE)
+        if match:
+            values.add(match.group(1).upper())
+    return values.pop() if len(values) == 1 else None
+
+
+def _trace_storage_value(value: str) -> str | None:
+    return _standalone_yes_no_value(value)
+
+
 def _table_to_markdown(table: Table) -> str:
     rows = [
-        [cell.text for cell in row.cells]
+        [
+            "\n".join(
+                paragraph.text
+                for paragraph in cell.paragraphs
+                if not _is_template_guidance(paragraph.text)
+            )
+            for cell in row.cells
+        ]
         for row in table.rows
     ]
     if not rows:
@@ -210,10 +335,57 @@ def _table_to_markdown(table: Table) -> str:
         for row in rows
     ]
     if column_count == 2:
-        items = []
+        chunks = []
+        list_items = []
+        business_contact_fields = None
         for label, value in normalized_rows:
             if not label and not value:
                 continue
+            if _is_kcp_consultation_label(label):
+                consultation_value = _standalone_yes_no_value(value)
+                if consultation_value is None and not value.strip():
+                    consultation_value = "NE"
+                if consultation_value is not None:
+                    list_items.append(
+                        f"- **Konzultace s KCP:** {consultation_value}"
+                    )
+                    continue
+                label = "Konzultace s KCP"
+            cleaned_label = re.sub(
+                r"\s+",
+                " ",
+                _clean_field_label(label),
+            ).casefold()
+            if cleaned_label == "ukládání do trace":
+                trace_value = _trace_storage_value(value)
+                if trace_value is not None:
+                    list_items.append(
+                        f"- **Ukládání do TRACE:** {trace_value}"
+                    )
+                continue
+            section_title = _contact_section_title(label)
+            if section_title:
+                contact_fields = _contact_fields(value)
+                if contact_fields:
+                    if section_title == "Business garant":
+                        business_contact_fields = contact_fields
+                        section_content = "\n".join(
+                            f"- **{field_label}:** {field_value}"
+                            for field_label, field_value in contact_fields
+                        )
+                    elif contact_fields == business_contact_fields:
+                        section_content = "Stejný jako Business garant"
+                    else:
+                        section_content = "\n".join(
+                            f"- **{field_label}:** {field_value}"
+                            for field_label, field_value in contact_fields
+                        )
+                    if list_items:
+                        chunks.append("\n".join(list_items))
+                        list_items = []
+                    chunks.append(f"## {section_title}\n\n{section_content}")
+                    continue
+
             label_lines = [
                 _escape_table_cell(_clean_field_label(line))
                 for line in label.splitlines()
@@ -235,8 +407,10 @@ def _table_to_markdown(table: Table) -> str:
                     item += " " + "<br>".join(label_lines[1:])
             else:
                 item = f"- {'<br>'.join(value_lines)}"
-            items.append(item)
-        return "\n".join(items)
+            list_items.append(item)
+        if list_items:
+            chunks.append("\n".join(list_items))
+        return "\n\n".join(chunks)
 
     normalized_rows = [
         [_escape_table_cell(cell) for cell in row]
@@ -286,6 +460,129 @@ def _is_email_body_boundary(block) -> bool:
             "en varianta",
         }
     )
+
+
+def _block_paragraphs(block):
+    if isinstance(block, Paragraph):
+        yield block
+    elif isinstance(block, Table):
+        for row in block.rows:
+            for cell in row.cells:
+                yield from cell.paragraphs
+
+
+def _channel_name(channel: str) -> str:
+    normalized = channel.casefold().replace("-", "")
+    if normalized.startswith("push"):
+        return "PUSH"
+    if normalized == "sms":
+        return "SMS"
+    return "Email"
+
+
+def _section_block_indexes(document_blocks, heading_index: int, level: int) -> range:
+    end_index = heading_index + 1
+    while end_index < len(document_blocks):
+        candidate = document_blocks[end_index]
+        if isinstance(candidate, Paragraph):
+            candidate_style = candidate.style.name if candidate.style else ""
+            candidate_heading = HEADING_STYLE.match(candidate_style)
+            if candidate_heading and int(candidate_heading.group(1)) <= level:
+                break
+        end_index += 1
+    return range(heading_index, end_index)
+
+
+def _channel_blocks_to_omit(document_blocks) -> set[int]:
+    not_required_channels = set()
+    omitted_blocks = set()
+    for block_index, block in enumerate(document_blocks):
+        text = "\n".join(paragraph.text for paragraph in _block_paragraphs(block))
+        matches = list(CHANNEL_NOT_REQUIRED.finditer(text))
+        if not matches:
+            continue
+        omitted_blocks.add(block_index)
+        not_required_channels.update(
+            _channel_name(match.group("channel"))
+            for match in matches
+        )
+
+    for block_index, block in enumerate(document_blocks):
+        if not isinstance(block, Paragraph):
+            continue
+        style_name = block.style.name if block.style else ""
+        heading = HEADING_STYLE.match(style_name)
+        if not heading:
+            continue
+
+        channel_heading = COMMUNICATION_HEADING.match(block.text.strip())
+        channel_status = CHANNEL_NOT_REQUIRED.search(block.text.strip())
+        if channel_heading:
+            channel = _channel_name(channel_heading.group("channel"))
+        elif channel_status:
+            channel = _channel_name(channel_status.group("channel"))
+        else:
+            continue
+        if channel not in not_required_channels:
+            continue
+
+        level = int(heading.group(1))
+        omitted_blocks.update(
+            _section_block_indexes(document_blocks, block_index, level)
+        )
+
+    return omitted_blocks
+
+
+def _instruction_blocks_to_omit(document_blocks) -> set[int]:
+    omitted_blocks = set()
+    for block_index, block in enumerate(document_blocks):
+        if not isinstance(block, Paragraph):
+            continue
+        style_name = block.style.name if block.style else ""
+        heading = HEADING_STYLE.match(style_name)
+        if not heading:
+            continue
+        heading_text = HEADING_NUMBER.sub("", block.text.strip(), count=1).strip()
+        if not INSTRUCTION_HEADING.fullmatch(heading_text):
+            continue
+
+        omitted_blocks.update(
+            _section_block_indexes(
+                document_blocks,
+                block_index,
+                int(heading.group(1)),
+            )
+        )
+    return omitted_blocks
+
+
+def _comment_ids_in_blocks(document_blocks, block_indexes) -> set[str]:
+    comment_ids = set()
+    comment_tags = {qn("w:commentRangeStart"), qn("w:commentReference")}
+    for block_index in block_indexes:
+        for paragraph in _block_paragraphs(document_blocks[block_index]):
+            for element in paragraph._p.iter():
+                if element.tag in comment_tags:
+                    comment_id = element.get(qn("w:id"))
+                    if comment_id is not None:
+                        comment_ids.add(comment_id)
+    return comment_ids
+
+
+def _comment_ids_in_template_guidance(document_blocks) -> set[str]:
+    comment_tags = {qn("w:commentRangeStart"), qn("w:commentReference")}
+    comment_ids = set()
+    for block in document_blocks:
+        for paragraph in _block_paragraphs(block):
+            if not _is_template_guidance(paragraph.text):
+                continue
+            for element in paragraph._p.iter():
+                if element.tag in comment_tags:
+                    comment_id = element.get(qn("w:id"))
+                    if comment_id is not None:
+                        comment_ids.add(comment_id)
+    return comment_ids
 
 
 def _collect_email_body(
@@ -576,6 +873,7 @@ def convert_txt(content: bytes, filename: str) -> tuple[str, list[str]]:
         text = content.decode("utf-8-sig").strip()
     except UnicodeDecodeError as error:
         raise ValueError("Textový soubor musí být kódovaný v UTF-8.") from error
+    text = _remove_template_guidance(text)
     return _add_fallback_title(text, filename), []
 
 
@@ -598,6 +896,7 @@ def convert_pdf(content: bytes, filename: str) -> tuple[str, list[str]]:
     ]
     if not text:
         warnings.append("V dokumentu nebyl nalezen extrahovatelný text.")
+    text = _remove_template_guidance(text)
     return _add_fallback_title(text, filename), warnings
 
 
@@ -615,6 +914,27 @@ def convert_docx(content: bytes, filename: str) -> tuple[str, list[str]]:
         raise ValueError("Soubor není platný dokument DOCX.") from error
 
     document_blocks = list(_iter_blocks(document))
+    omitted_channel_blocks = _channel_blocks_to_omit(document_blocks)
+    omitted_instruction_blocks = _instruction_blocks_to_omit(document_blocks)
+    omitted_template_blocks = {
+        index
+        for index, block in enumerate(document_blocks)
+        if isinstance(block, Paragraph) and _is_template_guidance(block.text)
+    }
+    omitted_section_blocks = omitted_channel_blocks | omitted_instruction_blocks
+    omitted_comment_ids = _comment_ids_in_blocks(
+        document_blocks,
+        omitted_section_blocks,
+    )
+    omitted_comment_ids.update(
+        _comment_ids_in_template_guidance(document_blocks)
+    )
+    omitted_blocks = omitted_section_blocks | omitted_template_blocks
+    document_blocks = [
+        block
+        for index, block in enumerate(document_blocks)
+        if index not in omitted_blocks
+    ]
     title_paragraph = next(
         (
             block for block in document_blocks
@@ -640,6 +960,12 @@ def convert_docx(content: bytes, filename: str) -> tuple[str, list[str]]:
         if comments_xml is not None
         else []
     )
+    comments = [
+        comment
+        for comment in comments
+        if comment.comment_id not in omitted_comment_ids
+        and not _is_template_guidance(comment.text)
+    ]
 
     blocks = []
     if communication_title is not None:
@@ -680,17 +1006,14 @@ def convert_docx(content: bytes, filename: str) -> tuple[str, list[str]]:
                 level = int(heading.group(1))
                 channel_match = COMMUNICATION_HEADING.match(block.text.strip())
                 if channel_match:
-                    channel = channel_match.group("channel").lower()
-                    if channel.startswith("push"):
-                        channel = "PUSH"
+                    channel = _channel_name(channel_match.group("channel"))
+                    if channel == "PUSH":
                         push_heading_level = level
                         push_segments.clear()
-                    elif channel == "sms":
-                        channel = "SMS"
+                    elif channel == "SMS":
                         push_heading_level = None
                         push_segments.clear()
                     else:
-                        channel = "Email"
                         push_heading_level = None
                         push_segments.clear()
                     current_channel = channel
