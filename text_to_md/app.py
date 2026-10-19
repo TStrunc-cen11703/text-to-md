@@ -1,8 +1,9 @@
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from zipfile import BadZipFile
 
 from docx.opc.exceptions import PackageNotFoundError
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from lxml.etree import XMLSyntaxError
 from pydantic import BaseModel
 
@@ -22,6 +23,14 @@ class ConversionResponse(BaseModel):
     filename: str
     markdown: str
     warnings: list[str]
+
+
+@app.get("/", include_in_schema=False)
+def home() -> FileResponse:
+    return FileResponse(
+        Path(__file__).with_name("index.html"),
+        media_type="text/html",
+    )
 
 
 @app.get("/health")

@@ -20,8 +20,9 @@ naskenovaných PDF se neprovádí. Zvýraznění mimo tělo e-mailu se nepřená
 popisky oddělené dvojtečkou se však zobrazí tučně.
 
 Převodník neodhaduje obchodní význam textů ani názvy proměnných. Výsledný
-Markdown a upozornění vrací HTML klientovi k náhledu a dalšímu zpracování.
-Dokument se během požadavku zpracuje v paměti a neukládá se na disk.
+Markdown a upozornění se zobrazí v lokálním HTML rozhraní k náhledu a dalšímu
+zpracování. Dokument se zpracuje lokálně a aplikace jej po ukončení požadavku
+neuchovává.
 
 ## Spuštění
 
@@ -29,6 +30,15 @@ Dokument se během požadavku zpracuje v paměti a neukládá se na disk.
 python -m pip install -r requirements.txt
 python -m uvicorn text_to_md.app:app --reload
 ```
+
+Na Windows lze aplikaci spustit také dvojklikem na `spustit-prevodnik.bat`.
+Při prvním spuštění vytvoří virtuální prostředí a nainstaluje závislosti.
+Poté otevře místní převodník v prohlížeči. Okno serveru nechte otevřené;
+zavřením okna aplikaci zastavíte.
+
+Na stránce vyberte soubor a klikněte na **Převést na Markdown**. Hotový
+soubor stáhnete tlačítkem **Stáhnout soubor .md**. Převod probíhá na vašem
+počítači; dokument se neposílá na GitHub ani jiné externí služby.
 
 API dokumentace je po spuštění dostupná na `http://127.0.0.1:8000/docs`.
 
