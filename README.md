@@ -24,6 +24,14 @@ Markdown a upozornění se zobrazí v lokálním HTML rozhraní k náhledu a dal
 zpracování. Dokument se zpracuje lokálně a aplikace jej po ukončení požadavku
 neuchovává.
 
+## Použití přímo na GitHubu
+
+Po úspěšném nasazení přes GitHub Actions bude aplikace dostupná na
+`https://tstrunc-cen11703.github.io/text-to-md/`. Repozitář i stránka jsou
+veřejné. Vybraný dokument zpracovává Python převodník spuštěný v prohlížeči;
+obsah dokumentu se neodesílá na GitHub ani na jiné servery. Při prvním použití
+se z CDN a PyPI stáhne běhové prostředí a potřebné knihovny.
+
 ## Spuštění
 
 ```powershell
