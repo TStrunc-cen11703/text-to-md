@@ -31,10 +31,15 @@ python -m pip install -r requirements.txt
 python -m uvicorn text_to_md.app:app --reload
 ```
 
-Na Windows lze aplikaci spustit také dvojklikem na `spustit-prevodnik.bat`.
-Při prvním spuštění vytvoří virtuální prostředí a nainstaluje závislosti.
-Poté otevře místní převodník v prohlížeči. Okno serveru nechte otevřené;
-zavřením okna aplikaci zastavíte.
+GitHub v prohlížeči soubory `.bat` nespouští. Pokud otevíráte projekt na
+GitHubu, zvolte **Code → Download ZIP**, archiv rozbalte a v Průzkumníku
+Windows otevřete rozbalenou složku. Teprve tam dvojklikněte na
+`spustit-prevodnik.bat`.
+
+Při prvním spuštění skript vytvoří virtuální prostředí a nainstaluje
+závislosti, takže je potřeba připojení k internetu. Poté otevře místní
+převodník v prohlížeči. Okno serveru nechte otevřené; zavřením okna aplikaci
+zastavíte.
 
 Na stránce vyberte soubor a klikněte na **Převést na Markdown**. Hotový
 soubor stáhnete tlačítkem **Stáhnout soubor .md**. Převod probíhá na vašem
