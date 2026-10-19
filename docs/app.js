@@ -62,7 +62,7 @@ async function convertFile(pyodide, file) {
     const response = await pyodide.runPythonAsync(`
 import json
 from pathlib import PurePath
-from converter import convert_docx, convert_pdf, convert_txt
+from converter import OUTPUT_FILENAME, convert_docx, convert_pdf, convert_txt
 
 filename = uploaded_filename.replace("\\\\", "/").rsplit("/", 1)[-1]
 extension = PurePath(filename).suffix.lower()
@@ -79,7 +79,7 @@ with open("${INPUT_PATH}", "rb") as source:
     markdown, conversion_warnings = converter(source.read(), filename)
 
 json.dumps({
-    "filename": f"{PurePath(filename).stem or 'dokument'}.md",
+    "filename": OUTPUT_FILENAME,
     "markdown": markdown,
     "warnings": conversion_warnings,
 }, ensure_ascii=False)

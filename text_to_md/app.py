@@ -7,7 +7,12 @@ from fastapi.responses import FileResponse
 from lxml.etree import XMLSyntaxError
 from pydantic import BaseModel
 
-from text_to_md.converter import convert_docx, convert_pdf, convert_txt
+from text_to_md.converter import (
+    OUTPUT_FILENAME,
+    convert_docx,
+    convert_pdf,
+    convert_txt,
+)
 
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
@@ -66,9 +71,8 @@ async def convert(file: UploadFile = File(...)) -> ConversionResponse:
             detail=f"Soubor se nepodařilo přečíst jako platný dokument {extension}.",
         ) from error
 
-    output_name = f"{PurePath(uploaded_name).stem or 'dokument'}.md"
     return ConversionResponse(
-        filename=output_name,
+        filename=OUTPUT_FILENAME,
         markdown=markdown,
         warnings=warnings,
     )

@@ -1,3 +1,4 @@
+import asyncio
 from io import BytesIO
 import unittest
 from xml.etree import ElementTree
@@ -6,9 +7,27 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from fastapi import UploadFile
 from pypdf import PdfWriter
 
+from text_to_md.app import convert as convert_upload
 from text_to_md.converter import _extract_comments, convert_docx, convert_pdf, convert_txt
+
+
+class ConvertEndpointTests(unittest.TestCase):
+    def test_uses_fixed_markdown_filename(self) -> None:
+        document = Document()
+        document.add_paragraph("Dokument pro test názvu výstupu.")
+        output = BytesIO()
+        document.save(output)
+        upload = UploadFile(
+            filename="jiny-nazev-vstupu.docx",
+            file=BytesIO(output.getvalue()),
+        )
+
+        response = asyncio.run(convert_upload(upload))
+
+        self.assertEqual(response.filename, "pozadavek-na-sablonu.md")
 
 
 class ConvertDocxTests(unittest.TestCase):

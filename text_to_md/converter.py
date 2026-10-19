@@ -18,6 +18,7 @@ from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
 
+OUTPUT_FILENAME = "pozadavek-na-sablonu.md"
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 HEADING_STYLE = re.compile(r"^(?:heading|nadpis)\s*(\d+)$", re.IGNORECASE)
 MESSAGE_LABEL = re.compile(

@@ -31,6 +31,7 @@ Po úspěšném nasazení přes GitHub Actions bude aplikace dostupná na
 veřejné. Vybraný dokument zpracovává Python převodník spuštěný v prohlížeči;
 obsah dokumentu se neodesílá na GitHub ani na jiné servery. Při prvním použití
 se z CDN a PyPI stáhne běhové prostředí a potřebné knihovny.
+Výsledný soubor se vždy jmenuje `pozadavek-na-sablonu.md`.
 
 ## Spuštění
 
@@ -62,13 +63,15 @@ API dokumentace je po spuštění dostupná na `http://127.0.0.1:8000/docs`.
 
 ```json
 {
-  "filename": "zadani.md",
+  "filename": "pozadavek-na-sablonu.md",
   "markdown": "# ...",
   "warnings": ["..."]
 }
 ```
 
-Limit nahrávaného souboru je 20 MB. `GET /health` slouží ke kontrole dostupnosti.
+Název výstupního souboru je vždy `pozadavek-na-sablonu.md`, bez ohledu na název
+vstupního souboru. Limit nahrávaného souboru je 20 MB. `GET /health` slouží ke
+kontrole dostupnosti.
 
 ## Testy
 
