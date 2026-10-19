@@ -107,7 +107,9 @@ class ConvertDocxTests(unittest.TestCase):
         run = title.add_run("Název zadávací dokumentace")
         run.bold = True
         run.font.size = 16 * 12700
-        document.add_heading("1 Obchodní zadání", level=1)
+        document.add_heading("1 Management summary", level=1)
+        document.add_heading("2 Obchodní zadání", level=1)
+        document.add_heading("2.1 Přehled", level=2)
         bullet = document.add_paragraph("Český jazyk", style="List Paragraph")
         numbering = document.part.numbering_part.element
         abstract_ids = [
@@ -149,7 +151,11 @@ class ConvertDocxTests(unittest.TestCase):
         markdown, _ = convert_docx(output.getvalue(), "zadani.docx")
 
         self.assertIn("# Název zadávací dokumentace", markdown)
-        self.assertIn("## 1 Obchodní zadání", markdown)
+        self.assertIn("## Management summary", markdown)
+        self.assertIn("## Obchodní zadání", markdown)
+        self.assertIn("### Přehled", markdown)
+        self.assertNotIn("## 1 Management summary", markdown)
+        self.assertNotIn("## 2 Obchodní zadání", markdown)
         self.assertIn("- Český jazyk", markdown)
         self.assertIn("Příklad běžného odstavce", markdown)
         self.assertNotIn("- Příklad běžného odstavce", markdown)

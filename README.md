@@ -9,6 +9,8 @@ v UTF-8 a textová PDF `.pdf`. Převod DOCX zachovává text, nadpisy, tabulky
 a vložené komentáře Wordu. Formátovaný titulní řádek a odrážkové i číslované
 seznamy se převádějí do odpovídající struktury Markdownu. Dvou-sloupcové
 formulářové tabulky se převedou na odrážky s tučně označenými názvy polí.
+Číslování kapitol na začátku nadpisů, například `1 Management summary`, se
+ve výstupu odstraní.
 Jako hlavní nadpis se použije název komunikace, pokud je v dokumentu uveden;
 vysvětlující texty v závorkách se z názvů formulářových polí odstraní.
 V e-mailu se předmět a preheader převedou jako textové bloky a tělo jako HTML

@@ -21,6 +21,7 @@ from pypdf.errors import PdfReadError
 OUTPUT_FILENAME = "pozadavek-na-sablonu.md"
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 HEADING_STYLE = re.compile(r"^(?:heading|nadpis)\s*(\d+)$", re.IGNORECASE)
+HEADING_NUMBER = re.compile(r"^\d+(?:\.\d+)*\.?\s+")
 MESSAGE_LABEL = re.compile(
     r"^(?:(?:obsah|tělo)\s+e-?mailu|předmět\s+(?:e-?mailu|mailu)|"
     r"pre-?header(?:\s+e-?mailu)?|"
@@ -143,7 +144,8 @@ def _paragraph_to_markdown(
     heading = HEADING_STYLE.match(style_name)
     if heading:
         level = min(max(int(heading.group(1)) + heading_offset, 1), 6)
-        return f'{"#" * level} {text}'
+        heading_text = HEADING_NUMBER.sub("", text, count=1)
+        return f'{"#" * level} {heading_text}'
 
     message_label = MESSAGE_LABEL.match(raw_text)
     if message_label:
