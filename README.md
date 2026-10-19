@@ -10,7 +10,8 @@ a vložené komentáře Wordu. Formátovaný titulní řádek a odrážkové i �
 seznamy se převádějí do odpovídající struktury Markdownu. Dvou-sloupcové
 formulářové tabulky se převedou na odrážky s tučně označenými názvy polí.
 Číslování kapitol na začátku nadpisů, například `1 Management summary`, se
-ve výstupu odstraní.
+ve výstupu odstraní. Nadpis druhé úrovně `Management summary` se převede na
+`Základní informace`.
 Jako hlavní nadpis se použije název komunikace, pokud je v dokumentu uveden;
 vysvětlující texty v závorkách se z názvů formulářových polí odstraní.
 V e-mailu se předmět a preheader převedou jako textové bloky a tělo jako HTML

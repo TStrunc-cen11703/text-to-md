@@ -151,10 +151,10 @@ class ConvertDocxTests(unittest.TestCase):
         markdown, _ = convert_docx(output.getvalue(), "zadani.docx")
 
         self.assertIn("# Název zadávací dokumentace", markdown)
-        self.assertIn("## Management summary", markdown)
+        self.assertIn("## Základní informace", markdown)
         self.assertIn("## Obchodní zadání", markdown)
         self.assertIn("### Přehled", markdown)
-        self.assertNotIn("## 1 Management summary", markdown)
+        self.assertNotIn("Management summary", markdown)
         self.assertNotIn("## 2 Obchodní zadání", markdown)
         self.assertIn("- Český jazyk", markdown)
         self.assertIn("Příklad běžného odstavce", markdown)

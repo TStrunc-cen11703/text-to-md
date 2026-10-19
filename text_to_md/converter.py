@@ -145,6 +145,8 @@ def _paragraph_to_markdown(
     if heading:
         level = min(max(int(heading.group(1)) + heading_offset, 1), 6)
         heading_text = HEADING_NUMBER.sub("", text, count=1)
+        if level == 2 and heading_text.casefold() == "management summary":
+            heading_text = "Základní informace"
         return f'{"#" * level} {heading_text}'
 
     message_label = MESSAGE_LABEL.match(raw_text)
