@@ -14,6 +14,8 @@ ve výstupu odstraní. Nadpis druhé úrovně `Management summary` se převede n
 `Základní informace`.
 Sekce Email, SMS nebo PUSH se vynechá, pokud dokument uvádí, že příslušný
 kanál není požadován, například `SMS není požadována`.
+Sekce `Obchodní zadání` se vynechá, pokud její obsah uvádí, že zadání není
+potřebné.
 Sekce `Instrukce` v DOCX se vynechá včetně podsekcí a jejího textu až do
 následujícího nadpisu stejné nebo vyšší úrovně.
 Vyřadí se také pole `Instrukce:` s vysvětlujícím textem.
@@ -43,6 +45,7 @@ Převodník neodhaduje obchodní význam textů ani názvy proměnných. Výsled
 Markdown a upozornění se zobrazí v lokálním HTML rozhraní k náhledu a dalšímu
 zpracování. Dokument se zpracuje lokálně a aplikace jej po ukončení požadavku
 neuchovává.
+Emotikony ve výstupním Markdownu se vždy zapisují jako znaky Unicode.
 
 ## Použití přímo na GitHubu
 

@@ -401,6 +401,28 @@ class ConvertDocxTests(unittest.TestCase):
                 self.assertNotIn(status, markdown)
                 self.assertNotIn(f"Obsah sekce {channel}.", markdown)
 
+    def test_omits_business_assignment_marked_not_needed(self) -> None:
+        document = Document()
+        document.add_heading("2 Obchodní zadání", level=1)
+        document.add_paragraph(
+            "Zadání pro průvodní e-mailovou a push komunikaci."
+        )
+        document.add_paragraph("Součástí e-mailu bude příloha se Souhrnem řešení.")
+        document.add_paragraph("Není potřebný.")
+        document.add_heading("Další část", level=1)
+        document.add_paragraph("Tento obsah zůstává.")
+        output = BytesIO()
+        document.save(output)
+
+        markdown, _ = convert_docx(output.getvalue(), "pozadavek.docx")
+
+        self.assertNotIn("Obchodní zadání", markdown)
+        self.assertNotIn("Zadání pro průvodní", markdown)
+        self.assertNotIn("Součástí e-mailu", markdown)
+        self.assertNotIn("Není potřebný", markdown)
+        self.assertIn("Další část", markdown)
+        self.assertIn("Tento obsah zůstává.", markdown)
+
     def test_omits_instruction_section_until_next_peer_heading(self) -> None:
         document = Document()
         document.add_heading("Základní informace", level=1)

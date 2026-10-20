@@ -56,6 +56,10 @@ CHANNEL_NOT_REQUIRED = re.compile(
     r"(?:požadov\w*|vyžadov\w*|potřeb\w*)",
     re.IGNORECASE,
 )
+BUSINESS_ASSIGNMENT_NOT_NEEDED = re.compile(
+    r"\b(?:není|nejsou)\s+(?:potřeb\w*|nutn\w*|požadov\w*|vyžadov\w*)",
+    re.IGNORECASE,
+)
 TEMPLATE_GUIDANCE = re.compile(
     r"^(?:tato\s+podkapitola\s+se\s+vyplní\b|"
     r"zde\s+se\s+doplní\s+(?:e-?mailová\s+)?textace\b)",
@@ -596,6 +600,34 @@ def _instruction_blocks_to_omit(document_blocks) -> set[int]:
     return omitted_blocks
 
 
+def _business_assignment_blocks_to_omit(document_blocks) -> set[int]:
+    omitted_blocks = set()
+    for block_index, block in enumerate(document_blocks):
+        if not isinstance(block, Paragraph):
+            continue
+        style_name = block.style.name if block.style else ""
+        heading = HEADING_STYLE.match(style_name)
+        if not heading:
+            continue
+        heading_text = HEADING_NUMBER.sub("", block.text.strip(), count=1).strip()
+        if heading_text.casefold() != "obchodní zadání":
+            continue
+
+        section_blocks = _section_block_indexes(
+            document_blocks,
+            block_index,
+            int(heading.group(1)),
+        )
+        section_text = "\n".join(
+            paragraph.text
+            for section_index in list(section_blocks)[1:]
+            for paragraph in _block_paragraphs(document_blocks[section_index])
+        )
+        if BUSINESS_ASSIGNMENT_NOT_NEEDED.search(section_text):
+            omitted_blocks.update(section_blocks)
+    return omitted_blocks
+
+
 def _comment_ids_in_blocks(document_blocks, block_indexes) -> set[str]:
     comment_ids = set()
     comment_tags = {qn("w:commentRangeStart"), qn("w:commentReference")}
@@ -1003,6 +1035,9 @@ def convert_docx(content: bytes, filename: str) -> tuple[str, list[str]]:
     document_blocks = list(_iter_blocks(document))
     omitted_channel_blocks = _channel_blocks_to_omit(document_blocks)
     omitted_instruction_blocks = _instruction_blocks_to_omit(document_blocks)
+    omitted_business_assignment_blocks = _business_assignment_blocks_to_omit(
+        document_blocks
+    )
     omitted_template_blocks = {
         index
         for index, block in enumerate(document_blocks)
@@ -1013,7 +1048,11 @@ def convert_docx(content: bytes, filename: str) -> tuple[str, list[str]]:
             or _is_optional_note(block.text)
         )
     }
-    omitted_section_blocks = omitted_channel_blocks | omitted_instruction_blocks
+    omitted_section_blocks = (
+        omitted_channel_blocks
+        | omitted_instruction_blocks
+        | omitted_business_assignment_blocks
+    )
     omitted_comment_ids = _comment_ids_in_blocks(
         document_blocks,
         omitted_section_blocks,
