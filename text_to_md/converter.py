@@ -50,7 +50,6 @@ COMMUNICATION_HEADING = re.compile(
     r"^(?:\d+(?:\.\d+)*\s+)?(?P<channel>sms|e-?mail|push(?:\s+notifikace)?)$",
     re.IGNORECASE,
 )
-INSTRUCTION_HEADING = re.compile(r"^instrukce$", re.IGNORECASE)
 CHANNEL_NOT_REQUIRED = re.compile(
     r"\b(?P<channel>sms|e-?mail|push(?:\s+notifikace)?)\b"
     r"[\s:–—-]*(?:není|nejsou)\s+"
@@ -161,6 +160,14 @@ def _paragraph_to_markdown(
             heading_text = "Základní informace"
         return f'{"#" * level} {heading_text}'
 
+    if ":" in raw_text:
+        raw_label, contact_value = raw_text.split(":", 1)
+        contact_title = _contact_section_title(raw_label)
+        if contact_title:
+            contact_fields = _contact_fields(contact_value)
+            if contact_fields:
+                return _contact_section_markdown(contact_title, contact_fields)
+
     message_label = MESSAGE_LABEL.match(raw_text)
     if message_label:
         return f"**{raw_text.rstrip(':').strip()}**"
@@ -198,6 +205,14 @@ def _is_template_guidance(text: str) -> bool:
     return TEMPLATE_GUIDANCE.match(normalized) is not None
 
 
+def _is_instruction_field(text: str) -> bool:
+    normalized = re.sub(r"\s+", " ", text).strip()
+    normalized = re.sub(r"^[-*+]\s*", "", normalized)
+    normalized = normalized.replace("**", "").replace("__", "")
+    label = normalized.partition(":")[0].strip()
+    return label.casefold() == "instrukce"
+
+
 def _remove_template_guidance(text: str) -> str:
     paragraphs = re.split(r"\n\s*\n", text)
     nonempty_paragraphs = [paragraph for paragraph in paragraphs if paragraph.strip()]
@@ -205,6 +220,7 @@ def _remove_template_guidance(text: str) -> str:
         paragraph
         for paragraph in nonempty_paragraphs
         if not _is_template_guidance(paragraph)
+        and not _is_instruction_field(paragraph)
     ]
     if len(filtered_paragraphs) == len(nonempty_paragraphs):
         return text
@@ -231,7 +247,9 @@ def _find_communication_title(document_blocks) -> Paragraph | None:
 
 
 def _contact_section_title(label: str) -> str | None:
-    normalized = " ".join(label.casefold().split())
+    normalized = re.sub(r"^[-*+]\s*", "", label.strip())
+    normalized = normalized.replace("**", "").replace("__", "")
+    normalized = " ".join(normalized.casefold().split()).rstrip(":").strip()
     if normalized == "business garant":
         return "Business garant"
     if (
@@ -292,6 +310,17 @@ def _contact_fields(value: str) -> list[tuple[str, str]]:
     return ordered_fields + extra_fields
 
 
+def _contact_section_markdown(
+    title: str,
+    fields: list[tuple[str, str]],
+) -> str:
+    details = "\n".join(
+        f"- **{field_label}:** {field_value}"
+        for field_label, field_value in fields
+    )
+    return f"## {title}\n\n{details}"
+
+
 def _standalone_yes_no_value(value: str) -> str | None:
     text = re.sub(r"<br\s*/?>", "\n", value, flags=re.IGNORECASE)
     text = re.sub(r"<[^>]+>", "", text)
@@ -341,6 +370,8 @@ def _table_to_markdown(table: Table) -> str:
         for label, value in normalized_rows:
             if not label and not value:
                 continue
+            if _is_instruction_field(label):
+                continue
             if _is_kcp_consultation_label(label):
                 consultation_value = _standalone_yes_no_value(value)
                 if consultation_value is None and not value.strip():
@@ -369,21 +400,23 @@ def _table_to_markdown(table: Table) -> str:
                 if contact_fields:
                     if section_title == "Business garant":
                         business_contact_fields = contact_fields
-                        section_content = "\n".join(
-                            f"- **{field_label}:** {field_value}"
-                            for field_label, field_value in contact_fields
+                        section_markdown = _contact_section_markdown(
+                            section_title,
+                            contact_fields,
                         )
                     elif contact_fields == business_contact_fields:
-                        section_content = "Stejný jako Business garant"
+                        section_markdown = (
+                            f"## {section_title}\n\nStejný jako Business garant"
+                        )
                     else:
-                        section_content = "\n".join(
-                            f"- **{field_label}:** {field_value}"
-                            for field_label, field_value in contact_fields
+                        section_markdown = _contact_section_markdown(
+                            section_title,
+                            contact_fields,
                         )
                     if list_items:
                         chunks.append("\n".join(list_items))
                         list_items = []
-                    chunks.append(f"## {section_title}\n\n{section_content}")
+                    chunks.append(section_markdown)
                     continue
 
             label_lines = [
@@ -544,7 +577,7 @@ def _instruction_blocks_to_omit(document_blocks) -> set[int]:
         if not heading:
             continue
         heading_text = HEADING_NUMBER.sub("", block.text.strip(), count=1).strip()
-        if not INSTRUCTION_HEADING.fullmatch(heading_text):
+        if not _is_instruction_field(heading_text):
             continue
 
         omitted_blocks.update(
@@ -570,12 +603,15 @@ def _comment_ids_in_blocks(document_blocks, block_indexes) -> set[str]:
     return comment_ids
 
 
-def _comment_ids_in_template_guidance(document_blocks) -> set[str]:
+def _comment_ids_in_omitted_text(document_blocks) -> set[str]:
     comment_tags = {qn("w:commentRangeStart"), qn("w:commentReference")}
     comment_ids = set()
     for block in document_blocks:
         for paragraph in _block_paragraphs(block):
-            if not _is_template_guidance(paragraph.text):
+            if (
+                not _is_template_guidance(paragraph.text)
+                and not _is_instruction_field(paragraph.text)
+            ):
                 continue
             for element in paragraph._p.iter():
                 if element.tag in comment_tags:
@@ -868,13 +904,56 @@ def _add_fallback_title(markdown: str, filename: str) -> str:
     return markdown.rstrip() + "\n"
 
 
+def _collapse_matching_guarantor_sections(markdown: str) -> str:
+    lines = markdown.splitlines()
+    business_details = set()
+    acceptance_sections = []
+
+    def section_end(start_index: int) -> int:
+        for index in range(start_index + 1, len(lines)):
+            heading = re.match(r"^(#+)\s+", lines[index])
+            if heading and len(heading.group(1)) <= 2:
+                return index
+        return len(lines)
+
+    for index, line in enumerate(lines):
+        title = line.strip()
+        if title not in {
+            "## Business garant",
+            "## Garant akceptace a schválení nasazení na PROD",
+        }:
+            continue
+        end_index = section_end(index)
+        details = tuple(
+            content.strip()
+            for content in lines[index + 1:end_index]
+            if content.strip()
+        )
+        if title == "## Business garant" and details:
+            business_details.add(details)
+        elif title == "## Garant akceptace a schválení nasazení na PROD":
+            acceptance_sections.append((index, end_index, details))
+
+    for start_index, end_index, details in reversed(acceptance_sections):
+        if details not in business_details or not details:
+            continue
+        replacement = ["", "Stejný jako Business garant"]
+        if end_index < len(lines):
+            replacement.append("")
+        lines[start_index + 1:end_index] = replacement
+
+    result = "\n".join(lines)
+    return result + ("\n" if markdown.endswith("\n") else "")
+
+
 def convert_txt(content: bytes, filename: str) -> tuple[str, list[str]]:
     try:
         text = content.decode("utf-8-sig").strip()
     except UnicodeDecodeError as error:
         raise ValueError("Textový soubor musí být kódovaný v UTF-8.") from error
     text = _remove_template_guidance(text)
-    return _add_fallback_title(text, filename), []
+    markdown = _add_fallback_title(text, filename)
+    return _collapse_matching_guarantor_sections(markdown), []
 
 
 def convert_pdf(content: bytes, filename: str) -> tuple[str, list[str]]:
@@ -897,7 +976,8 @@ def convert_pdf(content: bytes, filename: str) -> tuple[str, list[str]]:
     if not text:
         warnings.append("V dokumentu nebyl nalezen extrahovatelný text.")
     text = _remove_template_guidance(text)
-    return _add_fallback_title(text, filename), warnings
+    markdown = _add_fallback_title(text, filename)
+    return _collapse_matching_guarantor_sections(markdown), warnings
 
 
 def convert_docx(content: bytes, filename: str) -> tuple[str, list[str]]:
@@ -919,7 +999,11 @@ def convert_docx(content: bytes, filename: str) -> tuple[str, list[str]]:
     omitted_template_blocks = {
         index
         for index, block in enumerate(document_blocks)
-        if isinstance(block, Paragraph) and _is_template_guidance(block.text)
+        if isinstance(block, Paragraph)
+        and (
+            _is_template_guidance(block.text)
+            or _is_instruction_field(block.text)
+        )
     }
     omitted_section_blocks = omitted_channel_blocks | omitted_instruction_blocks
     omitted_comment_ids = _comment_ids_in_blocks(
@@ -927,7 +1011,7 @@ def convert_docx(content: bytes, filename: str) -> tuple[str, list[str]]:
         omitted_section_blocks,
     )
     omitted_comment_ids.update(
-        _comment_ids_in_template_guidance(document_blocks)
+        _comment_ids_in_omitted_text(document_blocks)
     )
     omitted_blocks = omitted_section_blocks | omitted_template_blocks
     document_blocks = [
@@ -965,6 +1049,7 @@ def convert_docx(content: bytes, filename: str) -> tuple[str, list[str]]:
         for comment in comments
         if comment.comment_id not in omitted_comment_ids
         and not _is_template_guidance(comment.text)
+        and not _is_instruction_field(comment.text)
     ]
 
     blocks = []
@@ -1200,4 +1285,5 @@ def convert_docx(content: bytes, filename: str) -> tuple[str, list[str]]:
 
     if comments_markdown:
         markdown = markdown.rstrip() + "\n\n" + comments_markdown + "\n"
+    markdown = _collapse_matching_guarantor_sections(markdown)
     return markdown, warnings

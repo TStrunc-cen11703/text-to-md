@@ -423,6 +423,26 @@ class ConvertDocxTests(unittest.TestCase):
         self.assertIn("Obchodní zadání", markdown)
         self.assertIn("Zachovaný obsah.", markdown)
 
+    def test_omits_instruction_field_from_docx_paragraph_and_table(self) -> None:
+        instruction = (
+            "Cílem této kapitoly je vytvořit shrnutí obsahu požadavku na EOM. "
+            "Vyplní Business garant/ Business analytik."
+        )
+        document = Document()
+        document.add_paragraph(f"Instrukce: {instruction}")
+        table = document.add_table(rows=1, cols=2)
+        table.rows[0].cells[0].text = "Instrukce"
+        table.rows[0].cells[1].text = instruction
+        document.add_paragraph("Požadovaný obsah.")
+        output = BytesIO()
+        document.save(output)
+
+        markdown, _ = convert_docx(output.getvalue(), "pozadavek.docx")
+
+        self.assertNotIn("Instrukce", markdown)
+        self.assertNotIn("Cílem této kapitoly", markdown)
+        self.assertIn("Požadovaný obsah.", markdown)
+
     def test_formats_guarantor_details_as_template_sections(self) -> None:
         document = Document()
         table = document.add_table(rows=0, cols=2)
@@ -463,6 +483,50 @@ class ConvertDocxTests(unittest.TestCase):
         self.assertIn("- **Zdrojový systém:** G4B_NOTIFICATIONS", markdown)
         self.assertNotIn("<br>email:", markdown)
         self.assertNotIn("+420 704 993 082", markdown)
+
+    def test_formats_business_guarantor_paragraph_as_section(self) -> None:
+        document = Document()
+        document.add_paragraph(
+            "Business garant: Iva Zázvorková<br>"
+            "email: izazvorkova@csas.cz<br>"
+            "telefon: +420 704 993 082"
+        )
+        output = BytesIO()
+        document.save(output)
+
+        markdown, _ = convert_docx(output.getvalue(), "pozadavek.docx")
+
+        self.assertIn(
+            "## Business garant\n\n"
+            "- **Jméno:** Iva Zázvorková\n"
+            "- **E-mail:** izazvorkova@csas.cz\n"
+            "- **Telefon:** +420704993082",
+            markdown,
+        )
+        self.assertNotIn("<br>", markdown)
+
+    def test_collapses_matching_business_and_acceptance_paragraphs(self) -> None:
+        contact = (
+            "Iva Zázvorková<br>email: izazvorkova@csas.cz<br>"
+            "telefon: +420 704 993 082"
+        )
+        document = Document()
+        document.add_paragraph(f"Business garant: {contact}")
+        document.add_paragraph(
+            "Garant pro akceptaci požadavku a schválení pro nasazen "
+            f"na PROD prostředí: {contact}"
+        )
+        output = BytesIO()
+        document.save(output)
+
+        markdown, _ = convert_docx(output.getvalue(), "pozadavek.docx")
+
+        self.assertIn(
+            "## Garant akceptace a schválení nasazení na PROD\n\n"
+            "Stejný jako Business garant",
+            markdown,
+        )
+        self.assertEqual(markdown.count("Iva Zázvorková"), 1)
 
     def test_simplifies_trace_storage_label(self) -> None:
         document = Document()
@@ -573,6 +637,20 @@ class ConvertOtherFormatsTests(unittest.TestCase):
         self.assertNotIn("Tato podkapitola se vyplní", markdown)
         self.assertNotIn("Zde se doplní Emailová textace", markdown)
         self.assertIn("Váš účet je aktivní.", markdown)
+
+    def test_omits_markdown_instruction_field_from_text(self) -> None:
+        content = (
+            "## Základní informace\n\n"
+            "- **Instrukce:** Cílem této kapitoly je vytvořit shrnutí obsahu "
+            "požadavku na EOM. Vyplní Business garant/ Business analytik.\n\n"
+            "- **Tribe:** DAF"
+        )
+
+        markdown, _ = convert_txt(content.encode("utf-8"), "pozadavek.txt")
+
+        self.assertNotIn("Instrukce", markdown)
+        self.assertNotIn("Cílem této kapitoly", markdown)
+        self.assertIn("- **Tribe:** DAF", markdown)
 
     def test_rejects_text_that_is_not_utf8(self) -> None:
         with self.assertRaisesRegex(ValueError, "UTF-8"):

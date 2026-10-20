@@ -16,9 +16,10 @@ Sekce Email, SMS nebo PUSH se vynechá, pokud dokument uvádí, že příslušn�
 kanál není požadován, například `SMS není požadována`.
 Sekce `Instrukce` v DOCX se vynechá včetně podsekcí a jejího textu až do
 následujícího nadpisu stejné nebo vyšší úrovně.
-Kontakty Business garanta a garanta akceptace se v tabulkách převedou do
-samostatných sekcí; pokud jsou stejné, druhá sekce uvede „Stejný jako Business
-garant“. Telefonní čísla se převedou bez mezer.
+Vyřadí se také pole `Instrukce:` s vysvětlujícím textem.
+Kontakty Business garanta a garanta akceptace se v tabulkách i textových řádcích
+převedou do samostatných sekcí; pokud jsou stejné, druhá sekce uvede „Stejný
+jako Business garant“. Telefonní čísla se převedou bez mezer.
 Popisek `Ukládání komunikace do TRACE` se zkrátí na `Ukládání do TRACE`.
 U tohoto pole se zachová pouze samostatná hodnota `ANO` nebo `NE`; položky
 `Trace_Type`, `Trace_Sub_Type` a `State` se vynechají.
