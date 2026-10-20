@@ -28,6 +28,7 @@ prázdná hodnota se doplní jako `NE`.
 Obecné instrukční texty šablony, například „Tato podkapitola se vyplní…“ nebo
 „Zde se doplní Emailová textace…“, se vynechají; skutečný obsah a komentáře
 k proměnným zůstávají zachovány.
+Samostatná poznámka `* nepovinné` se z výstupu vynechá.
 Jako hlavní nadpis se použije název komunikace, pokud je v dokumentu uveden;
 vysvětlující texty v závorkách se z názvů formulářových polí odstraní.
 V e-mailu se předmět a preheader převedou jako textové bloky a tělo jako HTML

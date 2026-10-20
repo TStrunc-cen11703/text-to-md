@@ -443,6 +443,19 @@ class ConvertDocxTests(unittest.TestCase):
         self.assertNotIn("Cílem této kapitoly", markdown)
         self.assertIn("Požadovaný obsah.", markdown)
 
+    def test_omits_optional_note_below_table(self) -> None:
+        document = Document()
+        document.add_table(rows=1, cols=2)
+        document.add_paragraph("* nepovinné")
+        document.add_paragraph("Důležitý obsah.")
+        output = BytesIO()
+        document.save(output)
+
+        markdown, _ = convert_docx(output.getvalue(), "pozadavek.docx")
+
+        self.assertNotIn("nepovinné", markdown)
+        self.assertIn("Důležitý obsah.", markdown)
+
     def test_formats_guarantor_details_as_template_sections(self) -> None:
         document = Document()
         table = document.add_table(rows=0, cols=2)
@@ -651,6 +664,15 @@ class ConvertOtherFormatsTests(unittest.TestCase):
         self.assertNotIn("Instrukce", markdown)
         self.assertNotIn("Cílem této kapitoly", markdown)
         self.assertIn("- **Tribe:** DAF", markdown)
+
+    def test_omits_standalone_optional_marker_from_text(self) -> None:
+        content = "Hodnota\n\n*nepovinné\n\nDalší obsah."
+
+        markdown, _ = convert_txt(content.encode("utf-8"), "pozadavek.txt")
+
+        self.assertNotIn("*nepovinné", markdown)
+        self.assertIn("Hodnota", markdown)
+        self.assertIn("Další obsah.", markdown)
 
     def test_rejects_text_that_is_not_utf8(self) -> None:
         with self.assertRaisesRegex(ValueError, "UTF-8"):

@@ -213,6 +213,10 @@ def _is_instruction_field(text: str) -> bool:
     return label.casefold() == "instrukce"
 
 
+def _is_optional_note(text: str) -> bool:
+    return re.fullmatch(r"\s*\*\s*nepovinné\s*[.!]?\s*", text, re.IGNORECASE) is not None
+
+
 def _remove_template_guidance(text: str) -> str:
     paragraphs = re.split(r"\n\s*\n", text)
     nonempty_paragraphs = [paragraph for paragraph in paragraphs if paragraph.strip()]
@@ -221,6 +225,7 @@ def _remove_template_guidance(text: str) -> str:
         for paragraph in nonempty_paragraphs
         if not _is_template_guidance(paragraph)
         and not _is_instruction_field(paragraph)
+        and not _is_optional_note(paragraph)
     ]
     if len(filtered_paragraphs) == len(nonempty_paragraphs):
         return text
@@ -350,6 +355,7 @@ def _table_to_markdown(table: Table) -> str:
                 paragraph.text
                 for paragraph in cell.paragraphs
                 if not _is_template_guidance(paragraph.text)
+                and not _is_optional_note(paragraph.text)
             )
             for cell in row.cells
         ]
@@ -611,6 +617,7 @@ def _comment_ids_in_omitted_text(document_blocks) -> set[str]:
             if (
                 not _is_template_guidance(paragraph.text)
                 and not _is_instruction_field(paragraph.text)
+                and not _is_optional_note(paragraph.text)
             ):
                 continue
             for element in paragraph._p.iter():
@@ -1003,6 +1010,7 @@ def convert_docx(content: bytes, filename: str) -> tuple[str, list[str]]:
         and (
             _is_template_guidance(block.text)
             or _is_instruction_field(block.text)
+            or _is_optional_note(block.text)
         )
     }
     omitted_section_blocks = omitted_channel_blocks | omitted_instruction_blocks
@@ -1050,6 +1058,7 @@ def convert_docx(content: bytes, filename: str) -> tuple[str, list[str]]:
         if comment.comment_id not in omitted_comment_ids
         and not _is_template_guidance(comment.text)
         and not _is_instruction_field(comment.text)
+        and not _is_optional_note(comment.text)
     ]
 
     blocks = []
